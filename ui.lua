@@ -5,7 +5,7 @@ local WindUI = loadstring(game:HttpGet(
 local Window = WindUI:CreateWindow({
   Title = "BOSS",
   Icon = "star",
-  Theme = "MonokeiPro",
+  Theme = "dark",
 })
 
 local Tab = Window:Tab({ Title = "Main", Icon = "home" })
