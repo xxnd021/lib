@@ -427,7 +427,7 @@ local function BringCar(model)
 		end
 	end
 	for i = 0, 1, 0.1 do
-		seat.CFrame = (CFrame.new(char.HumanoidRootPart.Position + Vector3.new(0,25,0)) * CFrame.Angles(0,math.rad(seat.Orientation.Y),0)):Lerp(CFrame.new(char.HumanoidRootPart.Position + Vector3.new(0,5,0)) * CFrame.Angles(0,math.rad(seat.Orientation.Y),0), i)
+		seat.CFrame = (CFrame.new(char.HumanoidRootPart.Position + Vector3.new(0,25,0)) * CFrame.Angles(0,math.rad(seat.Orientation.Y),0)):Lerp(CFrame.new(char.HumanoidRootPart.Position + Vector3.new(0,5,0)), i)
 		RunService.Heartbeat:Wait()
 	end
 	char.HumanoidRootPart.CFrame = seat.CFrame
@@ -484,10 +484,18 @@ ExploitTab:Toggle({ Title = "Bypass Anti-Cheat",  Value = true,  Callback = func
 -- ===================== LÓGICA =====================
 
 
--- Anti-Cheat Ping Bypass (corrigido)
+-- Anti-Cheat Bypass (atualizado - patched version)
+local ACConnections = {}
 local function AntiCheatPing()
-	if not S.BypassAC then return end
-	-- Remove o ClientAC que o servidor injeta no HumanoidRootPart
+	if not S.BypassAC then
+		for _, conn in pairs(ACConnections) do
+			if conn then pcall(function() conn:Disconnect() end) end
+		end
+		table.clear(ACConnections)
+		return
+	end
+	
+	-- Remove AC objects do character
 	pcall(function()
 		local char = LocalPlayer.Character
 		if char and char:FindFirstChild("HumanoidRootPart") then
@@ -495,22 +503,69 @@ local function AntiCheatPing()
 			if ac then ac:Destroy() end
 		end
 	end)
-	-- Intercepta e redireciona os eventos originais do jogo
-	-- em vez de disparar manualmente (evita detecção de Tamper)
+	
+	-- Hook nos eventos de AC do servidor
+	local remotes = {
+		"SignalPing",
+		"SignalSendACK",
+		"DetectionSignal",
+		"AnticheatVerify",
+		"ClientACPing",
+		"ACValidation",
+		"AntiCheatPulse",
+		"SecurityCheck"
+	}
+	
+	for _, remoteName in pairs(remotes) do
+		pcall(function()
+			local remote = ReplicatedStorage:FindFirstChild(remoteName)
+			if remote and remote:IsA("RemoteEvent") then
+				-- Intercepta sinais do servidor com delay randomizado
+				if not ACConnections[remoteName] then
+					local conn = remote.OnClientEvent:Connect(function(...)
+						if not S.BypassAC then return end
+						local args = {...}
+						task.wait(math.random(50, 150) / 1000)
+						pcall(function()
+							remote:FireServer(unpack(args))
+						end)
+					end)
+					ACConnections[remoteName] = conn
+				end
+			end
+		end)
+	end
+	
+	-- Monitora novos eventos de AC que aparecem
 	pcall(function()
-		local ping = ReplicatedStorage:FindFirstChild("SignalPing")
-		if ping then
-			for _, conn in pairs(getconnections(ping.OnClientEvent)) do
-				conn:Fire()
+		local lastScan = 0
+		local function checkNewSignals()
+			if tick() - lastScan < 1 then return end
+			lastScan = tick()
+			
+			for _, obj in pairs(ReplicatedStorage:GetChildren()) do
+				if obj:IsA("RemoteEvent") then
+					local name = obj.Name:lower()
+					if (string.find(name, "ac") or string.find(name, "cheat") or string.find(name, "signal") or string.find(name, "anticheat") or string.find(name, "security")) then
+						if not ACConnections[obj.Name] then
+							local conn = obj.OnClientEvent:Connect(function(...)
+								if not S.BypassAC then return end
+								local args = {...}
+								task.wait(math.random(50, 150) / 1000)
+								pcall(function()
+									obj:FireServer(unpack(args))
+								end)
+							end)
+							ACConnections[obj.Name] = conn
+						end
+					end
+				end
 			end
 		end
-	end)
-	pcall(function()
-		local ack = ReplicatedStorage:FindFirstChild("SignalSendACK")
-		if ack then
-			for _, conn in pairs(getconnections(ack.OnClientEvent)) do
-				conn:Fire()
-			end
+		
+		checkNewSignals()
+		if not ACConnections["ChildAddedConnection"] then
+			ACConnections["ChildAddedConnection"] = ReplicatedStorage.ChildAdded:Connect(checkNewSignals)
 		end
 	end)
 end
