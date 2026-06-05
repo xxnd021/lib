@@ -483,84 +483,45 @@ ExploitTab:Toggle({ Title = "Bypass Anti-Cheat",  Value = true,  Callback = func
 
 -- ===================== LÓGICA =====================
 
+
+-- Anti-Cheat Ping Bypass (corrigido)
 local function AntiCheatPing()
-    if not S.BypassAC then return end
-
-    local function removeClientAC(char)
-        if not char then return end
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            local ac = hrp:FindFirstChild("ClientAC")
-            if ac then
-                ac:Destroy()
-            end
-            local antiCheatScripts = char:FindFirstChild("AntiCheat")
-            if antiCheatScripts then
-                antiCheatScripts:Destroy()
-            end
-        end
-        local humanoid = char:FindFirstChild("Humanoid")
-        if humanoid then
-            local acOnHumanoid = humanoid:FindFirstChild("ClientAC")
-            if acOnHumanoid then
-                acOnHumanoid:Destroy()
-            end
-        end
-    end
-
-    if LocalPlayer.Character then
-        removeClientAC(LocalPlayer.Character)
-    end
-    LocalPlayer.CharacterAdded:Connect(removeClientAC)
-
-    local ping = ReplicatedStorage:FindFirstChild("SignalPing")
-    if ping and ping:IsA("RemoteEvent") then
-        local antiCheatPingConnection
-        antiCheatPingConnection = ping.OnClientEvent:Connect(function(...)
-            if not S.BypassAC then
-                antiCheatPingConnection:Disconnect()
-                return
-            end
-            local args = {...}
-            task.wait(math.random(5, 15) / 100)
-            pcall(function()
-                ping:FireServer(unpack(args))
-            end)
-        end)
-    end
-
-    local ack = ReplicatedStorage:FindFirstChild("SignalSendACK")
-    if ack and ack:IsA("RemoteEvent") then
-        local antiCheatAckConnection
-        antiCheatAckConnection = ack.OnClientEvent:Connect(function(...)
-            if not S.BypassAC then
-                antiCheatAckConnection:Disconnect()
-                return
-            end
-            local args = {...}
-            task.wait(math.random(5, 15) / 100)
-            pcall(function()
-                ack:FireServer(unpack(args))
-            end)
-        end)
-    end
-
-    local detectionSignal = ReplicatedStorage:FindFirstChild("DetectionSignal")
-    if detectionSignal and detectionSignal:IsA("RemoteEvent") then
-        local antiDetectionConnection
-        antiDetectionConnection = detectionSignal.OnClientEvent:Connect(function(...)
-            if not S.BypassAC then
-                antiDetectionConnection:Disconnect()
-                return
-            end
-            task.wait(math.random(5, 15) / 100)
-            pcall(function()
-                detectionSignal:FireServer(unpack({...}))
-            end)
-        end)
-    end
+	if not S.BypassAC then return end
+	-- Remove o ClientAC que o servidor injeta no HumanoidRootPart
+	pcall(function()
+		local char = LocalPlayer.Character
+		if char and char:FindFirstChild("HumanoidRootPart") then
+			local ac = char.HumanoidRootPart:FindFirstChild("ClientAC")
+			if ac then ac:Destroy() end
+		end
+	end)
+	-- Intercepta e redireciona os eventos originais do jogo
+	-- em vez de disparar manualmente (evita detecção de Tamper)
+	pcall(function()
+		local ping = ReplicatedStorage:FindFirstChild("SignalPing")
+		if ping then
+			for _, conn in pairs(getconnections(ping.OnClientEvent)) do
+				conn:Fire()
+			end
+		end
+	end)
+	pcall(function()
+		local ack = ReplicatedStorage:FindFirstChild("SignalSendACK")
+		if ack then
+			for _, conn in pairs(getconnections(ack.OnClientEvent)) do
+				conn:Fire()
+			end
+		end
+	end)
 end
 
+-- Bypass low level
+local function BypassLow()
+	if not S.BypassLow then return end
+	if LocalPlayer:GetAttribute("LowLevelPlr") then LocalPlayer:SetAttribute("LowLevelPlr", false) end
+end
+
+-- Lockpick / ATM
 local function AutoLockpick()
 	local gui = LocalPlayer.PlayerGui
 	local lp = gui:FindFirstChild("Lockpick")
@@ -587,6 +548,7 @@ local function AutoLockpick()
 	end
 end
 
+-- Speed hack
 local function SpeedHack()
 	local char = LocalPlayer.Character
 	if not char then return end
@@ -602,6 +564,7 @@ local function SpeedHack()
 	end
 end
 
+-- Jump hack
 local function JumpHack()
 	if not S.JumpHack then return end
 	local char = LocalPlayer.Character
@@ -622,6 +585,7 @@ local function JumpHack()
 	end
 end
 
+-- No clip
 local function NoClip()
 	local char = LocalPlayer.Character
 	if not char then return end
@@ -637,6 +601,7 @@ local function NoClip()
 	if torso then torso.CanCollide = false end
 end
 
+-- Anti staff
 local function AntiStaff()
 	if not S.AntiStaff or S.Desync then return end
 	local char = LocalPlayer.Character
@@ -666,6 +631,7 @@ local function AntiStaff()
 end
 
 
+-- ESP
 local function UpdateESP()
 	for _, p in pairs(Players:GetPlayers()) do
 		if p == LocalPlayer then continue end
@@ -743,6 +709,7 @@ local function UpdateESP()
 	end
 end
 
+-- Aimbot
 local function Aimbot()
 	if not S.AimbotEnabled then
 		AimbotTarget = nil
@@ -796,6 +763,7 @@ local function Aimbot()
 	end
 end
 
+-- Flying
 local function Flying()
 	local char = LocalPlayer.Character
 	if not char or not char:FindFirstChild("HumanoidRootPart") then return end
@@ -850,6 +818,7 @@ local function Flying()
 	if hum.MoveDirection.Magnitude > 0 then char:TranslateBy(hum.MoveDirection * 3.5) end
 end
 
+-- Auto Collect
 local function AutoCollect()
 	if not S.AutoCollect or S.Desync then AutoCollectOrigin = nil return end
 	local char = LocalPlayer.Character
@@ -877,6 +846,7 @@ local function AutoCollect()
 	end
 end
 
+-- Auto Farm Trash
 local function AutoFarmTrash()
 	if not S.AutoTrash or S.Desync then return end
 	local char = LocalPlayer.Character
@@ -911,6 +881,7 @@ local function AutoFarmTrash()
 	ReplicatedStorage:WaitForChild("Mercadinho"):WaitForChild("PrefRemote"):FireServer("Lixeiro", 1, true)
 end
 
+-- Auto Farm Fish
 local function AutoFarmFish()
 	if not S.AutoFish or S.Desync then
 		local char = LocalPlayer.Character
@@ -956,6 +927,7 @@ local function AutoFarmFish()
 	end
 end
 
+-- Auto Farm Essence
 local function AutoFarmEssence()
 	if not S.AutoEssence or S.Desync then return end
 	local char = LocalPlayer.Character
@@ -975,6 +947,7 @@ local function AutoFarmEssence()
 	end
 end
 
+-- Auto Farm Peça
 local function AutoFarmPeca()
 	if not S.AutoPeca or S.Desync then return end
 	local char = LocalPlayer.Character
@@ -995,6 +968,7 @@ local function AutoFarmPeca()
 	end
 end
 
+-- Auto Farm Samu
 local function AutoFarmSamu()
 	if not S.AutoSamu then
 		local char = LocalPlayer.Character
@@ -1049,6 +1023,7 @@ local function AutoFarmSamu()
 	end
 end
 
+-- Auto CL Rejoin
 local function AutoCL()
 	if S.AutoCLRejoin then
 		local gui = LocalPlayer.PlayerGui:FindFirstChild("TelaMorte")
@@ -1058,6 +1033,7 @@ local function AutoCL()
 	end
 end
 
+-- Desync mode (Heartbeat)
 local function DesyncLoop()
 	local char = LocalPlayer.Character
 	if not char then return end
@@ -1110,6 +1086,7 @@ local function DesyncLoop()
 	hrp.CFrame = hrp.CFrame * CFrame.new(0,300,0)
 end
 
+-- ===================== LOOPS =====================
 RunService.Heartbeat:Connect(function()
 	pcall(DesyncLoop)
 end)
@@ -1128,6 +1105,7 @@ RunService.RenderStepped:Connect(function()
 	pcall(SpeedHack)
 	pcall(NoClip)
 	pcall(JumpHack)
+	pcall(BypassLow)
 	pcall(AutoLockpick)
 	pcall(AutoFarmFish)
 	pcall(AutoFarmTrash)
