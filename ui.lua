@@ -98,7 +98,7 @@ local Window = WindUI:CreateWindow({
 	OpenButton = { Enabled = false },
 	Topbar = { Height = 45, ButtonsType = "Default" }
 })
-Window:Tag({ Title = "V1.0.1", Icon = "github", Color = Color3.fromHex("#1c1c1c"), Border = true })
+Window:Tag({ Title = "V1.0.3", Icon = "github", Color = Color3.fromHex("#1c1c1c"), Border = true })
 Window:Tag({ Title = "Discord", Icon = "globe", Color = Color3.fromHex("#5865F2"), Border = true })
 Window:DisableTopbarButtons({ "Close", "Minimize", "Fullscreen" })
 
@@ -484,88 +484,66 @@ ExploitTab:Toggle({ Title = "Bypass Anti-Cheat",  Value = true,  Callback = func
 -- ===================== LÓGICA =====================
 
 
--- Anti-Cheat Bypass (atualizado - patched version)
-local ACConnections = {}
+-- Anti-Cheat Bypass (Indetectável - só remove obstruções)
 local function AntiCheatPing()
-	if not S.BypassAC then
-		for _, conn in pairs(ACConnections) do
-			if conn then pcall(function() conn:Disconnect() end) end
-		end
-		table.clear(ACConnections)
-		return
-	end
+	if not S.BypassAC then return end
 	
-	-- Remove AC objects do character
+	-- Remove apenas objetos físicos do AC sem interagir com remotes
 	pcall(function()
 		local char = LocalPlayer.Character
-		if char and char:FindFirstChild("HumanoidRootPart") then
-			local ac = char.HumanoidRootPart:FindFirstChild("ClientAC")
+		if not char then return end
+		
+		local hrp = char:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			-- Remove ClientAC injetado
+			local ac = hrp:FindFirstChild("ClientAC")
 			if ac then ac:Destroy() end
+		end
+		
+		-- Remove scripts de AC no character
+		local antiCheatScript = char:FindFirstChild("AntiCheat")
+		if antiCheatScript then antiCheatScript:Destroy() end
+		
+		-- Remove objetos com nomes suspeitos de AC
+		for _, child in pairs(char:GetDescendants()) do
+			if child:IsA("LocalScript") or child:IsA("Script") then
+				local name = child.Name:lower()
+				if string.find(name, "ac") or string.find(name, "anticheat") or string.find(name, "security") then
+					child:Destroy()
+				end
+			end
 		end
 	end)
 	
-	-- Hook nos eventos de AC do servidor
-	local remotes = {
-		"SignalPing",
-		"SignalSendACK",
-		"DetectionSignal",
-		"AnticheatVerify",
-		"ClientACPing",
-		"ACValidation",
-		"AntiCheatPulse",
-		"SecurityCheck"
-	}
-	
-	for _, remoteName in pairs(remotes) do
-		pcall(function()
-			local remote = ReplicatedStorage:FindFirstChild(remoteName)
-			if remote and remote:IsA("RemoteEvent") then
-				-- Intercepta sinais do servidor com delay randomizado
-				if not ACConnections[remoteName] then
-					local conn = remote.OnClientEvent:Connect(function(...)
-						if not S.BypassAC then return end
-						local args = {...}
-						task.wait(math.random(50, 150) / 1000)
-						pcall(function()
-							remote:FireServer(unpack(args))
-						end)
-					end)
-					ACConnections[remoteName] = conn
-				end
-			end
-		end)
-	end
-	
-	-- Monitora novos eventos de AC que aparecem
+	-- Intercepta apenas se o servidor enviar sinais (responde naturalmente)
 	pcall(function()
-		local lastScan = 0
-		local function checkNewSignals()
-			if tick() - lastScan < 1 then return end
-			lastScan = tick()
-			
-			for _, obj in pairs(ReplicatedStorage:GetChildren()) do
-				if obj:IsA("RemoteEvent") then
-					local name = obj.Name:lower()
-					if (string.find(name, "ac") or string.find(name, "cheat") or string.find(name, "signal") or string.find(name, "anticheat") or string.find(name, "security")) then
-						if not ACConnections[obj.Name] then
-							local conn = obj.OnClientEvent:Connect(function(...)
-								if not S.BypassAC then return end
-								local args = {...}
-								task.wait(math.random(50, 150) / 1000)
-								pcall(function()
-									obj:FireServer(unpack(args))
-								end)
-							end)
-							ACConnections[obj.Name] = conn
-						end
+		local ping = ReplicatedStorage:FindFirstChild("SignalPing")
+		if ping and ping:IsA("RemoteEvent") then
+			-- Apenas responde se receber - não dispara
+			local conns = getconnections(ping.OnClientEvent)
+			if conns and #conns > 0 then
+				for _, conn in pairs(conns) do
+					if conn then
+						conn:Fire()
+						task.wait(0.1)
 					end
 				end
 			end
 		end
-		
-		checkNewSignals()
-		if not ACConnections["ChildAddedConnection"] then
-			ACConnections["ChildAddedConnection"] = ReplicatedStorage.ChildAdded:Connect(checkNewSignals)
+	end)
+	
+	pcall(function()
+		local ack = ReplicatedStorage:FindFirstChild("SignalSendACK")
+		if ack and ack:IsA("RemoteEvent") then
+			local conns = getconnections(ack.OnClientEvent)
+			if conns and #conns > 0 then
+				for _, conn in pairs(conns) do
+					if conn then
+						conn:Fire()
+						task.wait(0.1)
+					end
+				end
+			end
 		end
 	end)
 end
